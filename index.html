@@ -74,6 +74,8 @@ textarea{min-height:44px;resize:vertical}
 .skmin .nm,.minlbl{flex:1;min-width:0;font-weight:600;color:var(--ink);font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.skmin .sub,.minlbl small{display:block;font-weight:400;color:var(--mut);font-size:12px}
 .editbtn{border:1px solid var(--line);background:var(--tint);color:var(--teal);font-weight:600;border-radius:8px;padding:8px 14px;cursor:pointer;flex:none;font-size:14px}
 @keyframes nextph{0%,60%{box-shadow:0 0 0 4px var(--teal)}100%{box-shadow:0 0 0 0 transparent}}.ph.nextph{animation:nextph 1.6s ease-out}
+.scanbox{margin:4px 0 12px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff}.scanbox .addbtn{margin:8px 0 0}
+.scanrow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:8px}.scanrow .scannm{flex:1 1 calc(100% - 50px);white-space:normal;word-break:break-all}.scanrow .editbtn{flex:1}.scanic{font-size:26px;color:var(--teal)}.scannm{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis}.scannm small{display:block;font-weight:400;color:var(--mut);font-size:12px}
 .skdone{padding:8px;border-top:1px solid var(--line);background:#fafbfe}.savebtn{display:block;width:100%;border:0;background:var(--teal);color:#fff;font-weight:600;font-size:15px;padding:11px;border-radius:8px;cursor:pointer}
 .ph .savebtn{border-radius:0}.ph.min{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer;background:#fff}.ph.min>*:not(img):not(.minlbl):not(.editbtn){display:none!important}.ph.min .minlbl{display:block}.ph .editbtn{display:none}.ph.min .editbtn{display:block}
 .skbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px;background:var(--bg)}
@@ -667,6 +669,30 @@ function auditUI(){auditDefaults();const A=S.audit;
 function guideEl(sec){if(!sec.guide)return null;const parts=sec.guide.split(/\s*(?=\d+\.\s)/).filter(Boolean);
   const body=parts.length>1&&/^\d+\./.test(parts[0])?h('ol',{},...parts.map(p=>h('li',{},p.replace(/^\d+\.\s*/,'')))):h('div',{},sec.guide);
   const d=h('details',{class:'guide'},h('summary',{},sec.guideOpen?'How to fill this in':'Guidance'),body);if(sec.guideOpen)d.setAttribute('open','');return d;}
+// ================= 3D ROOM SCAN =================
+// A LiDAR scan exported from Polycam / Scaniverse / 3d Scanner App. Stored on the draft as S.scan={name,size,data}
+// (read by the XR review page). Kept out of the regular autosave and cached once in IndexedDB instead, because scans are big.
+const SCAN_WARN=25*1024*1024;
+const fmtMB=b=>b<1048576?Math.max(1,Math.round(b/1024))+' KB':(b/1048576).toFixed(b<10485760?1:0)+' MB';
+function cacheScan(){(S.scan?IDB.put('autosave-scan',S.scan):IDB.del('autosave-scan')).catch(()=>{});}
+function scanBlock(){
+  const wrap=h('div',{class:'scanbox'});
+  const inp=h('input',{type:'file',accept:'.glb,.gltf,.usdz,.obj,.ply,model/gltf-binary,model/vnd.usdz+zip',hidden:''});
+  inp.onchange=()=>{const f=inp.files[0];inp.value='';if(!f)return;
+    if(!/\.(glb|gltf|usdz|obj|ply)$/i.test(f.name)){toast('Choose a .glb, .usdz, .obj or .ply scan file',4000);return;}
+    const r=new FileReader();r.onerror=()=>toast('Could not read that file');
+    r.onload=()=>{let d=r.result;if(/\.glb$/i.test(f.name))d=d.replace(/^data:[^;]*;/,'data:model/gltf-binary;');
+      S.scan={name:f.name,size:f.size,data:d};cacheScan();draw();markDirty();
+      toast(f.size>SCAN_WARN?'Scan attached, but it is large ('+fmtMB(f.size)+') so saving the draft may be slow':'Room scan attached',f.size>SCAN_WARN?5000:2500);};
+    toast('Reading scan...',8000);r.readAsDataURL(f);};
+  const draw=()=>{wrap.innerHTML='';const sc=S.scan;
+    wrap.append(h('div',{class:'qtxt'},'3D room scan (optional)',h('span',{class:'hint'},'Scan the room with Polycam, Scaniverse or 3d Scanner App, export it as .glb, then attach it here. It is saved in the draft file, not the PDF.')));
+    if(sc){wrap.append(h('div',{class:'scanrow'},h('span',{class:'scanic'},'▣'),h('div',{class:'scannm'},sc.name,h('small',{},fmtMB(sc.size||0)+(sc.size>SCAN_WARN?' - large file, saving may be slow':''))),
+        h('button',{type:'button',class:'editbtn',onclick:()=>inp.click()},'Replace'),
+        h('button',{type:'button',class:'editbtn',onclick:e=>sure(e.currentTarget,()=>{S.scan=null;cacheScan();draw();markDirty();})},'Remove')));}
+    else wrap.append(h('button',{type:'button',class:'addbtn',onclick:()=>inp.click()},'+ Attach room scan'));
+    wrap.append(inp);};
+  draw();return wrap;}
 function build(){
   migrateMeas();
   const main=$('#main'),nav=$('#nav');main.innerHTML='';nav.innerHTML='';
@@ -683,7 +709,7 @@ function build(){
         if(t==='check'){const cb=h('input',{type:'checkbox','data-f':l});cb.checked=!!o[l];cb.onchange=()=>{o[l]=cb.checked;gateCheck();};return h('label',{class:'f wide chk','data-req':req?l:''},cb,h('span',{},l,star));}
         if(t==='area'){const ta=h('textarea',{rows:2,'data-f':l});ta.value=o[l]||'';ta.oninput=()=>{o[l]=ta.value;if(req)gateCheck();};if(hint)ta.rows=3;return h('label',{class:'f wide qrow','data-req':req?l:''},h('span',{class:'qtxt'},l,star,hint?h('span',{class:'hint'},hint):null),ta);}
         const inp=h('input',{type:'text',inputmode:u==='mm'?'decimal':'text','data-f':l});inp.value=o[l]||'';inp.oninput=()=>o[l]=inp.value;return h('label',{class:'f'},l,h('div',{class:'unit'},inp,u?h('span',{},u):null));})));}
-    if(sec.id==='meas')body.append(photoBlock(sec.id));
+    if(sec.id==='meas'){body.append(scanBlock());body.append(photoBlock(sec.id));}
     sec.items.forEach((q,i)=>body.append(itemRow(sec.id,i,q)));
     if(sec.id==='floor')body.append(levelUI());
     if(!sec.photosFirst&&sec.id!=='meas')body.append(photoBlock(sec.id));
@@ -744,13 +770,14 @@ const IDB={p:null,open(){return this.p||(this.p=new Promise((res,rej)=>{const r=
   async get(k){const db=await this.open();return new Promise((res,rej)=>{const r=db.transaction('kv').objectStore('kv').get(k);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});},
   async del(k){const db=await this.open();return new Promise((res)=>{const t=db.transaction('kv','readwrite');t.objectStore('kv').delete(k);t.oncomplete=()=>res();});}};
 const serial=()=>JSON.stringify(S,(k,v)=>k.startsWith('_')?undefined:v);
+const serialLite=()=>JSON.stringify(S,function(k,v){return k.startsWith('_')||(k==='scan'&&this===S)?undefined:v;});
 let dirty=false,asTimer=null;
 function markDirty(){dirty=true;try{gateCheck();}catch(e){}clearTimeout(asTimer);asTimer=setTimeout(autosaveNow,1500);}
-async function autosaveNow(){clearTimeout(asTimer);if(!dirty)return;try{await IDB.put('autosave',{t:Date.now(),data:serial()});dirty=false;}catch(e){console.warn('autosave failed',e);}}
+async function autosaveNow(){clearTimeout(asTimer);if(!dirty)return;try{await IDB.put('autosave',{t:Date.now(),data:serialLite()});dirty=false;}catch(e){console.warn('autosave failed',e);}}
 ['input','change'].forEach(ev=>document.addEventListener(ev,e=>{if(e.target.closest&&e.target.closest('#modal'))return;markDirty();},true));
 document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('main'))markDirty();},true);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')autosaveNow();});
-async function checkAutosave(){try{const a=await IDB.get('autosave');if(!a)return;const d=JSON.parse(a.data);
+async function checkAutosave(){try{const a=await IDB.get('autosave');if(!a)return;const d=JSON.parse(a.data);try{const sc=await IDB.get('autosave-scan');if(sc&&!d.scan)d.scan=sc;}catch(e){}
   if(window.__authReturn){reset(d);return;}
   const has=Object.values(d.info||{}).some(v=>v)||(d.photos||[]).length||(d.sketches||[]).length||Object.values(d.items||{}).some(x=>x&&(x.s||x.n));if(!has)return;
   const when=new Date(a.t).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
@@ -849,7 +876,7 @@ async function saveOut(blob,name,kind){
     if(r==='cancel'){toast('Not saved');return false;}}
   return saveFile(blob,name,kind);}
 const fname=ext=>{const c=(S.info.client||'Client').replace(/[^\w-]+/g,'_'),p=(S.info.project||'').replace(/[^\w-]+/g,'_'),d=S.info.date||new Date().toISOString().slice(0,10);return `SiteVisit_${c}${p?'_'+p:''}_${d}.${ext}`;};
-const reset=d=>{Object.keys(S).forEach(k=>delete S[k]);Object.assign(S,BLANK(),d||{});build();markDirty();};
+const reset=d=>{Object.keys(S).forEach(k=>delete S[k]);Object.assign(S,BLANK(),d||{});cacheScan();build();markDirty();};
 $('#btnSave').onclick=async()=>{closeAllEditors();dirty=true;await autosaveNow();await saveOut(new Blob([serial()],{type:'application/json'}),fname('json'),'json');};
 $('#loadFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{reset(JSON.parse(await f.text()));closeModal();toast('Draft loaded');}catch(err){toast('Could not open that file');}e.target.value='';};
 $('#btnLoad').onclick=async()=>{
@@ -939,6 +966,7 @@ async function makePdf(){
     y-=8;heading(sec.title);
     if(sec.fields&&sec.fields.every(f=>f[2]==='area'||f[2]==='check')){const o=S.meas[sec.id]||{};sec.fields.forEach(([l,,t])=>kv(t==='check'?l.replace(/ \(.*\)/,''):l,t==='check'?(o[l]?'Yes':'No'):o[l]));y-=4;}
     else if(sec.fields){const o=S.meas[sec.id]||{};const colW=CWd/3;const gf=sec.fields.filter(f=>f[2]!=='area'&&f[2]!=='check'),tf=sec.fields.filter(f=>f[2]==='area'||f[2]==='check');gf.forEach(([l,u],i,arr)=>{if(i%3===0)need(30);const x=M+(i%3)*colW;page.drawText(clean(l),{x,y:y-8,size:7.5,font:F,color:GREY});page.drawText(clean((o[l]||'-')+(o[l]&&u?' '+u:'')),{x,y:y-21,size:10.5,font:B,color:INK});if(i%3===2||i===arr.length-1)y-=30;});if(tf.length){y-=4;hr();y-=4;tf.forEach(([l,,t])=>kv(t==='check'?l.replace(/ \(.*\)/,''):l,t==='check'?(o[l]?'Yes':'No'):o[l]));}y-=4;}
+    if(sec.id==='meas'&&S.scan&&S.scan.name)kv('3D room scan',S.scan.name+' ('+fmtMB(S.scan.size||0)+') - attached to the draft file for 3D review');
     sec.items.forEach((q,i)=>{const st=S.items[sec.id+'.'+i]||{};const ql=wrap(q,B,9.5,CWd*0.42-8),nl=wrap((st.n||'')+(st.o?'\nOwner: '+st.o:''),F,9.5,CWd*0.58-80);
       const hh=Math.max(ql.length,nl.length)*12.5+8;need(hh);
       ql.forEach((l,k)=>page.drawText(l,{x:M,y:y-10-k*12.5,size:9.5,font:B,color:INK}));
