@@ -183,7 +183,7 @@ code{background:var(--bg);padding:2px 5px;border-radius:4px;word-break:break-all
 
 <script>const SECTIONS = [
  {id:'meas', title:'Room dimensions', guideOpen:true, guide:'1. Fill in the key measurements in the boxes below. Use mm throughout. 2. Add any general photos of the room with "Take photo" underneath. 3. Tap "Add dimensions" on a photo to draw measurements straight onto it.',
-  fields:[['Room length','mm'],['Room width','mm'],['Ceiling height - min','mm'],['Ceiling height - max','mm'],['Ceiling height (tile grid)','mm'],['Ceiling height (deck)','mm']],
+  fields:[['Room length','mm'],['Room width','mm'],['Ceiling height - min','mm'],['Ceiling height - max','mm'],['Ceiling height (tile grid)','mm'],['Ceiling height (deck)','mm'],['Architectural drawings available?','','area'],['Architectural drawings requested','','check']],
   items:[]},
 {id:'walls', title:'Walls', minPhotos:4, photosFirst:true, guideOpen:true, guide:'1. Take a photo of each wall, you can take multiple photos at once, then name each photo and add dimensions. 2. Add dimensions of doors and windows too, then tick the boxes below to confirm. 3. Make sure any alcoves or protruding sections of wall are measured. 4. Fill in the wall finish, construction and any features that could affect the projection area.',
   fields:[['Current wall finish','','area',true],['Wall construction - gypsum board / plaster / other?','','area'],['Skirting boards, trims or other features that could affect the projection area?','','area'],['Window dimensions taken (tick if no windows)','','check',true],['Door dimensions taken','','check',true]],
@@ -917,6 +917,8 @@ async function makePdf(){
   y-=8;heading('Summary for design team');
   kv('Overall site readiness',S.summary.overall);kv('Key notes for design',S.summary.design);kv('Agreed next steps',S.summary.next);
   if(S.level&&S.level.closed&&S.level.req!=='No'){const {st}=lvCalc();kv('Floor levelness',lvSummary(st));}
+  {const rm=S.meas.meas||{},cl=S.meas.ceiling||{};const dav=(rm['Architectural drawings available?']||'').trim(),drq=rm['Architectural drawings requested']||cl['Architectural drawings requested'];
+    if(dav||drq)kv('Architectural drawings',[dav,drq?'Drawings have been requested':''].filter(Boolean).join('. '));}
   const cnt={OK:0,Issue:0,'Follow-up':0,'N/A':0,'':0};let tot=0;SECTIONS.forEach(sec=>sec.items.forEach((q,i)=>{tot++;cnt[(S.items[sec.id+'.'+i]||{}).s||'']++;}));
   y-=6;need(20);let cx=M;['OK','Issue','Follow-up','N/A'].forEach(k=>{const t=k+': '+cnt[k];const w=B.widthOfTextAtSize(t,9)+16;page.drawRectangle({x:cx,y:y-16,width:w,height:16,color:hex(STCOL[k])});page.drawText(t,{x:cx+8,y:y-11.5,size:9,font:B,color:rgb(1,1,1)});cx+=w+6;});
   page.drawText(clean('Not assessed: '+cnt['']+' of '+tot),{x:cx+4,y:y-11.5,size:9,font:F,color:GREY});y-=26;
@@ -932,7 +934,7 @@ async function makePdf(){
   for(const sec of SECTIONS){
     y-=8;heading(sec.title);
     if(sec.fields&&sec.fields.every(f=>f[2]==='area'||f[2]==='check')){const o=S.meas[sec.id]||{};sec.fields.forEach(([l,,t])=>kv(t==='check'?l.replace(/ \(.*\)/,''):l,t==='check'?(o[l]?'Yes':'No'):o[l]));y-=4;}
-    else if(sec.fields){const o=S.meas[sec.id]||{};const colW=CWd/3;sec.fields.forEach(([l,u],i)=>{if(i%3===0)need(30);const x=M+(i%3)*colW;page.drawText(clean(l),{x,y:y-8,size:7.5,font:F,color:GREY});page.drawText(clean((o[l]||'-')+(o[l]&&u?' '+u:'')),{x,y:y-21,size:10.5,font:B,color:INK});if(i%3===2||i===sec.fields.length-1)y-=30;});y-=4;}
+    else if(sec.fields){const o=S.meas[sec.id]||{};const colW=CWd/3;const gf=sec.fields.filter(f=>f[2]!=='area'&&f[2]!=='check'),tf=sec.fields.filter(f=>f[2]==='area'||f[2]==='check');gf.forEach(([l,u],i,arr)=>{if(i%3===0)need(30);const x=M+(i%3)*colW;page.drawText(clean(l),{x,y:y-8,size:7.5,font:F,color:GREY});page.drawText(clean((o[l]||'-')+(o[l]&&u?' '+u:'')),{x,y:y-21,size:10.5,font:B,color:INK});if(i%3===2||i===arr.length-1)y-=30;});if(tf.length){y-=4;hr();y-=4;tf.forEach(([l,,t])=>kv(t==='check'?l.replace(/ \(.*\)/,''):l,t==='check'?(o[l]?'Yes':'No'):o[l]));}y-=4;}
     sec.items.forEach((q,i)=>{const st=S.items[sec.id+'.'+i]||{};const ql=wrap(q,B,9.5,CWd*0.42-8),nl=wrap((st.n||'')+(st.o?'\nOwner: '+st.o:''),F,9.5,CWd*0.58-80);
       const hh=Math.max(ql.length,nl.length)*12.5+8;need(hh);
       ql.forEach((l,k)=>page.drawText(l,{x:M,y:y-10-k*12.5,size:9.5,font:B,color:INK}));
