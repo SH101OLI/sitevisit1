@@ -135,6 +135,8 @@ label.chk input{width:22px;height:22px;margin:0;accent-color:var(--teal);flex:no
 label.chk.missing{border-color:var(--iss);background:#fef2f2}
 /* camera */
 #camOv{position:fixed;inset:0;z-index:100;background:#000;display:none;flex-direction:column}
+#camMsg{position:absolute;left:24px;right:24px;top:40%;color:#fff;text-align:center;font-size:17px;line-height:1.4;display:none;z-index:1}
+#camZoom{display:flex;justify-content:center;gap:10px;padding:8px 0 2px;background:#000}#camZoom:empty{display:none}#camZoom button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:22px;min-width:52px;height:40px;font-size:15px;font-weight:600;font-family:inherit;cursor:pointer}#camZoom button.on{background:#fff;color:#000}
 #camTop{display:flex;align-items:center;gap:10px;padding:10px 14px;padding-top:max(10px,env(safe-area-inset-top));color:#fff;font-size:15px}
 #camTop b{flex:1}
 #camVid{flex:1;min-height:0;width:100%;object-fit:contain;background:#000}
@@ -177,7 +179,7 @@ code{background:var(--bg);padding:2px 5px;border-radius:4px;word-break:break-all
 <main id="main"></main>
 <div id="toast"></div>
 <div id="modal"></div>
-<div id="camOv"><div id="camTop"><b>Camera &middot; <span id="camSec"></span></b><span id="camCount"></span><img id="camThumb" alt=""></div><video id="camVid" playsinline muted autoplay></video><div id="camBar"><button type="button" class="camSide" id="camSwitch">&#x21C4; Switch</button><button type="button" id="camShoot" title="Take photo (Space)"></button><button type="button" class="camSide" id="camDone">Done</button></div></div><div id="camFlash"></div>
+<div id="camOv"><div id="camTop"><b>Camera &middot; <span id="camSec"></span></b><span id="camCount"></span><img id="camThumb" alt=""></div><div id="camMsg">Igloo Site Visit needs the camera to take site photos.<br><br>If your phone asks, tap <b>Allow</b>. Photos stay on this phone.</div><video id="camVid" playsinline muted autoplay></video><div id="camZoom"></div><div id="camBar"><button type="button" class="camSide" id="camSwitch">&#x21C4; Switch</button><button type="button" id="camShoot" title="Take photo (Space)"></button><button type="button" class="camSide" id="camDone">Done</button></div></div><div id="camFlash"></div>
 
 <script>const SECTIONS = [
  {id:'meas', title:'Room dimensions', guideOpen:true, guide:'1. Fill in the key measurements in the boxes below. Use mm throughout. 2. Add any general photos of the room with "Take photo" underneath. 3. Tap "Add dimensions" on a photo to draw measurements straight onto it.',
@@ -282,7 +284,8 @@ async function openCamera(secId,fallback){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){fallback.click();return;}
   CAM.sec=secId;CAM.count=0;
   $('#camOv').style.display='flex';$('#camSec').textContent=(SECTIONS.find(s=>s.id===secId)?.title||SEC_NAME[secId]||'').replace(/ \(.*\)/,'').replace(/ sketch$/,'');$('#camCount').textContent='';$('#camThumb').style.display='none';
-  try{await startCam();}catch(e){closeCamera();toast('Camera not available ('+(e.name||'error')+') - choose a photo instead',5000);fallback.click();}
+  $('#camMsg').style.display='block';
+  try{try{await startCam(CAM.multiId);}catch(e){if(!CAM.multiId)throw e;CAM.multiId=null;await startCam();}$('#camMsg').style.display='none';}catch(e){$('#camMsg').style.display='none';closeCamera();toast('Camera not available ('+(e.name||'error')+') - choose a photo instead',5000);fallback.click();}
 }
 async function startCam(devId){
   stopStream();
@@ -293,6 +296,30 @@ async function startCam(devId){
   try{CAM.devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');}catch(e){CAM.devs=[];}
   const cur=CAM.stream.getVideoTracks()[0]?.getSettings().deviceId;const i=CAM.devs.findIndex(d=>d.deviceId===cur);if(i>=0)CAM.idx=i;
   $('#camSwitch').style.visibility=CAM.devs.length>1?'visible':'hidden';
+  // Prefer the iPhone's combined back camera (it covers 0.5x ultra-wide) when the phone offers one.
+  if(!devId){const m=CAM.devs.find(d=>/triple|dual wide/i.test(d.label));if(m){CAM.multiId=m.deviceId;if(m.deviceId!==cur){try{return await startCam(m.deviceId);}catch(e){CAM.multiId=null;}}}}
+  setupZoom();
+}
+function setupZoom(){
+  const bar=$('#camZoom');bar.innerHTML='';const tr=CAM.stream&&CAM.stream.getVideoTracks()[0];if(!tr)return;
+  const caps=tr.getCapabilities?tr.getCapabilities():{};const label=tr.label||'';const opts=[];
+  if(caps.zoom&&caps.zoom.max>caps.zoom.min){
+    // iPhone multi-lens cameras count zoom from the ultra-wide lens, so 2 on the camera = 1x on screen.
+    const k=/triple|dual wide|ultra/i.test(label)&&caps.zoom.min>=1?2:1;
+    [0.5,1,2,3].forEach(v=>{const z=v*k;if(z>=caps.zoom.min-0.01&&z<=caps.zoom.max+0.01)opts.push({v,go:()=>tr.applyConstraints({advanced:[{zoom:z}]})});});
+    if(caps.zoom.min*1/k<0.99&&!opts.some(o=>o.v<1)){const z=caps.zoom.min;opts.unshift({v:Math.round(z/k*10)/10,go:()=>tr.applyConstraints({advanced:[{zoom:z}]})});}
+  }else{
+    const uw=CAM.devs.find(d=>/ultra/i.test(d.label)&&/back|rear/i.test(d.label));
+    if(uw){const main=CAM.devs.find(d=>/back|rear/i.test(d.label)&&!/ultra|tele|triple|dual/i.test(d.label));
+      opts.push({v:0.5,cur:tr.getSettings().deviceId===uw.deviceId,go:()=>startCam(uw.deviceId)});if(main)opts.push({v:1,cur:tr.getSettings().deviceId===main.deviceId,go:()=>startCam(main.deviceId)});}
+  }
+  if(opts.length<2)return;
+  const curZ=(tr.getSettings().zoom);
+  opts.forEach(o=>{const b=h('button',{type:'button'},(o.v<1?String(o.v).replace(/^0/,''):o.v)+'\u00D7');
+    b.onclick=async()=>{try{await o.go();bar.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));}catch(e){toast('Zoom not available');}};bar.append(b);
+    if(o.cur||(o.cur===undefined&&o.v===1))b.classList.add('on');});
+  // Start at 1x on multi-lens cameras (they open at the widest lens otherwise).
+  const one=opts.find(o=>o.v===1);if(one&&caps.zoom&&curZ!=null&&Math.abs(curZ-(/triple|dual wide|ultra/i.test(label)&&caps.zoom.min>=1?2:1))>0.01)one.go().catch(()=>{});
 }
 function stopStream(){if(CAM.stream){CAM.stream.getTracks().forEach(t=>t.stop());CAM.stream=null;}}
 function closeCamera(){stopStream();$('#camOv').style.display='none';if(CAM.count){renderPhotos();markDirty();toast(CAM.count+' photo'+(CAM.count>1?'s':'')+' added',2500);const el=document.querySelector(`.photos[data-sec="${CAM.sec}"]`);el&&el.scrollIntoView({block:'center',behavior:'smooth'});}}
