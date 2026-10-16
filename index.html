@@ -69,6 +69,12 @@ textarea{min-height:44px;resize:vertical}
 .ph .x{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.65);color:#fff;border:0;border-radius:14px;min-width:28px;height:28px;cursor:pointer;font-size:12px;padding:0 8px}
 .ph .dimbtn{display:block;width:100%;border:0;border-top:1px solid var(--line);background:var(--tint);color:var(--teal);font-weight:600;font-size:14px;padding:9px;cursor:pointer}
 .sk{border:1px solid var(--line);border-radius:10px;margin:10px 0;overflow:hidden}
+.skmin,.minlbl{display:none}.sk.min>*{display:none!important}.sk.min>.skmin{display:flex!important}
+.skmin{align-items:center;gap:10px;padding:8px 10px;cursor:pointer;background:#fff}.skmin img,.ph.min img{width:64px!important;height:48px!important;object-fit:cover;border-radius:6px;border:1px solid var(--line);flex:none}
+.skmin .nm,.minlbl{flex:1;min-width:0;font-weight:600;color:var(--ink);font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.skmin .sub,.minlbl small{display:block;font-weight:400;color:var(--mut);font-size:12px}
+.editbtn{border:1px solid var(--line);background:var(--tint);color:var(--teal);font-weight:600;border-radius:8px;padding:8px 14px;cursor:pointer;flex:none;font-size:14px}
+.skdone{padding:8px;border-top:1px solid var(--line);background:#fafbfe}.savebtn{display:block;width:100%;border:0;background:var(--teal);color:#fff;font-weight:600;font-size:15px;padding:11px;border-radius:8px;cursor:pointer}
+.ph .savebtn{border-radius:0}.ph.min{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer;background:#fff}.ph.min>*:not(img):not(.minlbl):not(.editbtn){display:none!important}.ph.min .minlbl{display:block}.ph .editbtn{display:none}.ph.min .editbtn{display:block}
 .skbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px;background:var(--bg)}
 .skbar button,.skbar select{border:1px solid var(--line);background:#fff;border-radius:6px;padding:8px 11px;cursor:pointer;font-size:14px;width:auto;color:var(--ink)}
 .skbar button.on{outline:2px solid var(--teal);background:var(--tint)}
@@ -152,7 +158,7 @@ label.chk.missing{border-color:var(--iss);background:#fef2f2}
 code{background:var(--bg);padding:2px 5px;border-radius:4px;word-break:break-all;font-size:12px}
 @media (max-width:700px){.item,label.f.qrow{grid-template-columns:1fr}.qtxt{padding-top:0}main{padding:10px}.body{padding:8px 10px 14px}}
 @media (max-width:600px){.full{display:none}.short{display:inline}header h1{display:none}header .logo{height:30px}header button{padding:9px 10px;font-size:14px}header{gap:6px}}
-@media print{section.folded{display:none}.nextbar,section.locked::after{display:none!important}section.locked>.body,section.locked>.guide{display:block!important}header,nav,.skbar,.skhint,.addbtn,.st button:not(.on),.ph .x,.ph .dimbtn,#embedWarn,#restoreBar{display:none!important}section{box-shadow:none}body{background:#fff}}
+@media print{section.folded{display:none}.nextbar,section.locked::after{display:none!important}section.locked>.body,section.locked>.guide{display:block!important}header,nav,.skbar,.skhint,.addbtn,.st button:not(.on),.ph .x,.ph .dimbtn,.savebtn,.editbtn,#embedWarn,#restoreBar{display:none!important}section{box-shadow:none}body{background:#fff}}
 </style>
 </head>
 <body>
@@ -304,7 +310,11 @@ function renderPhotos(){
       const cap=h('input',{type:'text',placeholder:'Caption'});cap.value=p.cap;cap.oninput=()=>p.cap=cap.value;
       const pos=h('input',{type:'text',placeholder:'Taken from (e.g. doorway, looking N)'});pos.value=p.pos;pos.oninput=()=>p.pos=pos.value;
       w.append(h('div',{class:'ph'},h('img',{src:p.data}),h('button',{class:'x',type:'button',title:'Remove',onclick:e=>sure(e.currentTarget,()=>{S.photos=S.photos.filter(x=>x!==p);renderPhotos();markDirty();})},'\u00D7'),cap,pos,
-        h('button',{type:'button',class:'dimbtn',onclick:()=>photoToMarkup(p)},'\u2194 Add dimensions')));
+        h('button',{type:'button',class:'dimbtn',onclick:()=>photoToMarkup(p)},'\u2194 Add dimensions'),
+        h('div',{class:'minlbl'},p.cap||'Photo',p.pos?h('small',{},p.pos):null),
+        h('button',{type:'button',class:'editbtn',onclick:e=>{e.stopPropagation();p.min=false;renderPhotos();markDirty();}},'Edit'),
+        h('button',{type:'button',class:'savebtn',onclick:()=>{p.min=true;renderPhotos();markDirty();}},'\u2713 Save')));
+      const card=w.lastChild;if(p.min){card.classList.add('min');card.onclick=()=>{p.min=false;renderPhotos();markDirty();};}
     });});
   progress();
 }
@@ -327,7 +337,7 @@ function sketchUI(s,startTool){
   function draw(){ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#fff';ctx.fillRect(0,0,W0,H0);
     if(bgImage){const r=Math.min(W0/bgImage.width,H0/bgImage.height);const w=bgImage.width*r,hh=bgImage.height*r;ctx.drawImage(bgImage,(W0-w)/2,(H0-hh)/2,w,hh);}
     else if(s.bg==='grid'){ctx.lineWidth=1;ctx.strokeStyle='#e5e9ec';for(let x=0;x<=W0;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H0);ctx.stroke();}for(let y=0;y<=H0;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W0,y);ctx.stroke();}ctx.strokeStyle='#cfd6db';for(let x=0;x<=W0;x+=200){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H0);ctx.stroke();}for(let y=0;y<=H0;y+=200){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W0,y);ctx.stroke();}}
-    s.strokes.forEach(st=>{if(!(editor&&editor.st===st&&st.t==='text'))drawStroke(st);}); if(cur)drawStroke(cur);}
+    s.strokes.forEach(st=>{if(!(editor&&editor.st===st&&st.t==='text'))drawStroke(st);}); if(cur)drawStroke(cur);if(s.min&&s._mini)s._mini();}
   const textFont=st=>`600 ${st.w*9+14}px Segoe UI, sans-serif`;
   function drawStroke(st){ctx.save();
     if(st.t==='text'){ctx.font=textFont(st);ctx.textBaseline='alphabetic';if(s.photo){const w=ctx.measureText(st.text).width,hg=st.w*9+14;ctx.fillStyle='rgba(255,255,255,.85)';ctx.fillRect(st.p[0][0]-4,st.p[0][1]-hg,w+8,hg+8);}ctx.fillStyle=st.c;ctx.fillText(st.text,st.p[0][0],st.p[0][1]);ctx.restore();return;}
@@ -412,7 +422,13 @@ function sketchUI(s,startTool){
       h('button',{type:'button',class:'addbtn',onclick:()=>{s.bgImg=null;loadBg();markDirty();}},'Clear background'),
       h('button',{type:'button',class:'addbtn',onclick:e=>sure(e.currentTarget,()=>{closeEditor(false);s.strokes=[];draw();markDirty();})},'Clear drawing'),
       h('button',{type:'button',class:'addbtn',onclick:e=>sure(e.currentTarget,()=>{S.sketches=S.sketches.filter(x=>x!==s);box.remove();markDirty();})},'Delete sketch'),bgIn);}
-  const box=h('div',{class:'sk'},topRow,tools,hint,wrapEl);
+  const mImg=h('img',{alt:''}),mName=h('span',{}),mSub=h('span',{class:'sub'});
+  const mini=h('div',{class:'skmin',onclick:()=>setMin(false)},mImg,h('div',{class:'nm'},mName,mSub),h('button',{type:'button',class:'editbtn'},'Edit'));
+  const refreshMini=()=>{mImg.src=cv.toDataURL('image/jpeg',.5);mName.textContent=s.title||(s.photo?'Photo':'Sketch');const d=s.strokes.filter(x=>x.t==='dim').length;mSub.textContent=(s.pos?s.pos+'  \u00B7  ':'')+(s.photo?d+' dimension'+(d===1?'':'s'):s.strokes.length?'Drawn':'Empty');};
+  const setMin=v=>{closeEditor(true);s.min=v;box.classList.toggle('min',v);if(v){refreshMini();box.scrollIntoView({block:'nearest',behavior:'smooth'});}markDirty();};
+  const done=h('div',{class:'skdone'},h('button',{type:'button',class:'savebtn',onclick:()=>setMin(true)},s.photo?'\u2713 Save photo and dimensions':'\u2713 Save sketch'));
+  const box=h('div',{class:'sk'+(s.min?' min':'')},mini,topRow,tools,hint,wrapEl,done);
+  s._mini=()=>{if(s.min)refreshMini();};
   s._canvas=cv;s._close=()=>closeEditor(true);s._draw=()=>draw(); loadBg(); return box;
 }
 function renderSketches(){const lists={};document.querySelectorAll('.sklist').forEach(w=>{w.innerHTML='';lists[w.dataset.sec]=w;});S.sketches.forEach(s=>{if(!s.sec||!lists[s.sec])s.sec='general';lists[s.sec].append(sketchUI(s));});}
