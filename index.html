@@ -1010,7 +1010,11 @@ else{
   if(EMBEDDED){document.body.insertBefore(h('div',{id:'embedWarn'},h('b',{},'Saving may not work here. '),'This app is open inside another page (for example the OneDrive or SharePoint viewer), which blocks saving. Open the app\'s web address directly in Safari, Chrome or Edge, then use "Add to Home Screen".'),document.body.firstChild);}
   (async()=>{await checkAutosave();
     if(window.__authReturn){try{await finishAuth(window.__authReturn);}catch(e){toast('Sign-in failed: '+e.message,7000);}}})();
-  if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+  if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){
+    // Check for a new version on every open and whenever the app comes back to the front; reload once it's installed.
+    const hadSW=!!navigator.serviceWorker.controller;let reloading=false;
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!hadSW||reloading)return;reloading=true;try{autosaveNow();}catch(e){}toast('Updating app...',3000);setTimeout(()=>location.reload(),700);});
+    navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{r.update().catch(()=>{});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')r.update().catch(()=>{});});}).catch(()=>{});}
 }
 const setH=()=>document.documentElement.style.setProperty('--hh',$('header').offsetHeight+'px');setH();addEventListener('resize',setH);
 </script>
