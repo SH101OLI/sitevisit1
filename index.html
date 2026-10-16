@@ -73,6 +73,7 @@ textarea{min-height:44px;resize:vertical}
 .skmin{align-items:center;gap:10px;padding:8px 10px;cursor:pointer;background:#fff}.skmin img,.ph.min img{width:64px!important;height:48px!important;object-fit:cover;border-radius:6px;border:1px solid var(--line);flex:none}
 .skmin .nm,.minlbl{flex:1;min-width:0;font-weight:600;color:var(--ink);font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.skmin .sub,.minlbl small{display:block;font-weight:400;color:var(--mut);font-size:12px}
 .editbtn{border:1px solid var(--line);background:var(--tint);color:var(--teal);font-weight:600;border-radius:8px;padding:8px 14px;cursor:pointer;flex:none;font-size:14px}
+@keyframes nextph{0%,60%{box-shadow:0 0 0 4px var(--teal)}100%{box-shadow:0 0 0 0 transparent}}.ph.nextph{animation:nextph 1.6s ease-out}
 .skdone{padding:8px;border-top:1px solid var(--line);background:#fafbfe}.savebtn{display:block;width:100%;border:0;background:var(--teal);color:#fff;font-weight:600;font-size:15px;padding:11px;border-radius:8px;cursor:pointer}
 .ph .savebtn{border-radius:0}.ph.min{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer;background:#fff}.ph.min>*:not(img):not(.minlbl):not(.editbtn){display:none!important}.ph.min .minlbl{display:block}.ph .editbtn{display:none}.ph.min .editbtn{display:block}
 .skbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px;background:var(--bg)}
@@ -270,6 +271,9 @@ function photoBlock(secId){
   const addSk=()=>{const n=S.sketches.filter(x=>x.sec===secId&&!x.photo).length;const s=newSketch((SEC_NAME[secId]||'Sketch')+(n?' '+(n+1):''),secId);const ui=sketchUI(s);skl.append(ui);ui.scrollIntoView({block:'center',behavior:'smooth'});};
   return h('div',{},h('div',{class:'btnrow'},h('button',{type:'button',class:'addbtn cambtn',onclick:()=>openCamera(secId,cam)},'\uD83D\uDCF7 Take photo'),h('button',{type:'button',class:'addbtn',onclick:()=>inp.click()},'+ Choose photos'),h('button',{type:'button',class:'addbtn',onclick:addSk},'+ Add sketch')),inp,cam,wrap,skl);
 }
+// After saving one photo, bring the next photo still to be done in that section into view.
+function goNextPhoto(sec){const n=document.querySelector(`.photos[data-sec="${sec}"] .ph:not(.min)`);if(!n)return false;
+  setTimeout(()=>{n.scrollIntoView({block:'center',behavior:'smooth'});n.classList.remove('nextph');void n.offsetWidth;n.classList.add('nextph');},60);return true;}
 function photoToMarkup(p){
   const go=()=>{const W0=1600,H0=Math.max(500,Math.min(2000,Math.round(1600*(p.h||1000)/(p.w||1600))));
     const s={id:Date.now()+Math.random(),title:p.cap||'Photo',sec:p.sec,photo:true,pos:p.pos||'',strokes:[],bg:'blank',bgImg:p.data,cw:W0,ch:H0};
@@ -340,7 +344,7 @@ function renderPhotos(){
         h('button',{type:'button',class:'dimbtn',onclick:()=>photoToMarkup(p)},'\u2194 Add dimensions'),
         h('div',{class:'minlbl'},p.cap||'Photo',p.pos?h('small',{},p.pos):null),
         h('button',{type:'button',class:'editbtn',onclick:e=>{e.stopPropagation();p.min=false;renderPhotos();markDirty();}},'Edit'),
-        h('button',{type:'button',class:'savebtn',onclick:()=>{p.min=true;renderPhotos();markDirty();}},'\u2713 Save')));
+        h('button',{type:'button',class:'savebtn',onclick:()=>{p.min=true;renderPhotos();markDirty();goNextPhoto(sec);}},'\u2713 Save')));
       const card=w.lastChild;if(p.min){card.classList.add('min');card.onclick=()=>{p.min=false;renderPhotos();markDirty();};}
     });});
   progress();
@@ -452,7 +456,7 @@ function sketchUI(s,startTool){
   const mImg=h('img',{alt:''}),mName=h('span',{}),mSub=h('span',{class:'sub'});
   const mini=h('div',{class:'skmin',onclick:()=>setMin(false)},mImg,h('div',{class:'nm'},mName,mSub),h('button',{type:'button',class:'editbtn'},'Edit'));
   const refreshMini=()=>{mImg.src=cv.toDataURL('image/jpeg',.5);mName.textContent=s.title||(s.photo?'Photo':'Sketch');const d=s.strokes.filter(x=>x.t==='dim').length;mSub.textContent=(s.pos?s.pos+'  \u00B7  ':'')+(s.photo?d+' dimension'+(d===1?'':'s'):s.strokes.length?'Drawn':'Empty');};
-  const setMin=v=>{closeEditor(true);s.min=v;box.classList.toggle('min',v);if(v){refreshMini();box.scrollIntoView({block:'nearest',behavior:'smooth'});}markDirty();};
+  const setMin=v=>{closeEditor(true);s.min=v;box.classList.toggle('min',v);if(v){refreshMini();if(!goNextPhoto(s.sec))box.scrollIntoView({block:'nearest',behavior:'smooth'});}markDirty();};
   const done=h('div',{class:'skdone'},h('button',{type:'button',class:'savebtn',onclick:()=>setMin(true)},s.photo?'\u2713 Save photo and dimensions':'\u2713 Save sketch'));
   const box=h('div',{class:'sk'+(s.min?' min':'')},mini,topRow,tools,hint,wrapEl,done);
   s._mini=()=>{if(s.min)refreshMini();};
